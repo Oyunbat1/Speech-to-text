@@ -1,0 +1,26 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# Temp files
+tmp/uploads/*
+tmp/outputs/*
+!tmp/uploads/.gitkeep
+!tmp/outputs/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store

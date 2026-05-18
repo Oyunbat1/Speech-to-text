@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+python-multipart
+pyannote.audio
+omegaconf
+hydra-core
+pydub
+openpyxl
+requests
+python-dotenv
+torch
+torchaudio
+soundfile
+numpy

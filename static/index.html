@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mongolian Lecture Transcriber</title>
+  <style>
+    :root {
+      --bg: #f7f7f8;
+      --card: #ffffff;
+      --fg: #1a1a1a;
+      --muted: #6b7280;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --border: #e5e7eb;
+      --error: #b91c1c;
+      --success: #047857;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      margin: 0;
+      padding: 2rem 1rem;
+      display: flex;
+      justify-content: center;
+    }
+    .card {
+      background: var(--card);
+      width: 100%;
+      max-width: 640px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    h1 { margin: 0 0 0.25rem; font-size: 1.5rem; }
+    .subtitle { color: var(--muted); margin: 0 0 1.5rem; font-size: 0.95rem; }
+    .field { margin-bottom: 1.25rem; }
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 0.35rem;
+      font-size: 0.95rem;
+    }
+    .hint {
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin: 0.25rem 0 0.5rem;
+    }
+    input[type="file"] {
+      width: 100%;
+      padding: 0.6rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #fafafa;
+      cursor: pointer;
+    }
+    button {
+      width: 100%;
+      padding: 0.85rem;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button:hover:not(:disabled) { background: var(--accent-hover); }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .status {
+      margin-top: 1.25rem;
+      padding: 0.85rem 1rem;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      display: none;
+    }
+    .status.show { display: block; }
+    .status.info { background: #eff6ff; color: #1e3a8a; }
+    .status.error { background: #fef2f2; color: var(--error); }
+    .status.success { background: #ecfdf5; color: var(--success); }
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid #93c5fd;
+      border-top-color: #1e3a8a;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Mongolian Lecture Transcriber</h1>
+    <p class="subtitle">Upload a teacher voice sample and a lecture recording to get a labelled transcript.</p>
+
+    <form id="upload-form">
+      <div class="field">
+        <label for="teacher_reference">Teacher voice reference</label>
+        <p class="hint">10-30 seconds of only the teacher speaking, clear and noise-free. WAV/MP3/M4A/MP4/MOV/MKV.</p>
+        <input type="file" id="teacher_reference" name="teacher_reference"
+               accept=".wav,.mp3,.m4a,.mp4,.mov,.mkv" required />
+      </div>
+
+      <div class="field">
+        <label for="lecture">Lecture recording</label>
+        <p class="hint">Audio or video of the full lecture. Up to 200 MB.</p>
+        <input type="file" id="lecture" name="lecture"
+               accept=".wav,.mp3,.m4a,.mp4,.mov,.mkv" required />
+      </div>
+
+      <button type="submit" id="submit-btn">Transcribe</button>
+    </form>
+
+    <div class="status" id="status"></div>
+  </div>
+
+  <script>
+    const form = document.getElementById('upload-form');
+    const btn = document.getElementById('submit-btn');
+    const status = document.getElementById('status');
+
+    function setStatus(kind, html) {
+      status.className = 'status show ' + kind;
+      status.innerHTML = html;
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const data = new FormData(form);
+      btn.disabled = true;
+      setStatus('info', '<span class="spinner"></span>Processing... this can take several minutes for long lectures.');
+
+      try {
+        const resp = await fetch('/upload', { method: 'POST', body: data });
+        if (!resp.ok) {
+          let msg = 'Upload failed (' + resp.status + ').';
+          try {
+            const j = await resp.json();
+            if (j && j.detail) msg = j.detail;
+          } catch (_) {}
+          setStatus('error', msg);
+          btn.disabled = false;
+          return;
+        }
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'transcript.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        setStatus('success', 'Done. Your transcript download has started.');
+      } catch (err) {
+        setStatus('error', 'Network error: ' + err.message);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
