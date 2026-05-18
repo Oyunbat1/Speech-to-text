@@ -8,6 +8,23 @@ warnings.filterwarnings("ignore", message=".*torchcodec.*")
 warnings.filterwarnings("ignore", message=".*libtorchcodec.*")
 logging.getLogger("pyannote").setLevel(logging.ERROR)
 
+import pyannote.audio as _pyannote_audio
+
+# pyannote.audio 4.x switched audio I/O to torchcodec, which on Windows needs
+# FFmpeg's shared DLLs (avformat-*.dll, avcodec-*.dll, ...) on PATH — not just
+# ffmpeg.exe. Without them, diarization crashes natively mid-pipeline with no
+# Python traceback. Pin to 3.x (see requirements.txt) and fail loudly here so
+# a stray upgrade is obvious.
+_pyannote_major = int(_pyannote_audio.__version__.split(".")[0])
+if _pyannote_major >= 4:
+    raise RuntimeError(
+        f"pyannote.audio {_pyannote_audio.__version__} is installed, but this "
+        f"project requires the 3.x series. Run:\n"
+        f"    pip install 'pyannote.audio>=3.1,<4' --force-reinstall\n"
+        f"(4.x depends on torchcodec, which causes native crashes on Windows "
+        f"unless FFmpeg shared DLLs are on PATH.)"
+    )
+
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse

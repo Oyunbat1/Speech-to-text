@@ -1,4 +1,5 @@
 import os
+import warnings
 from collections import defaultdict
 from functools import lru_cache
 
@@ -11,6 +12,17 @@ from pyannote.core import Segment as PSegment
 
 from app.diarize import Segment
 
+# pyannote's StatsPool computes std with Bessel's correction. On very short
+# inputs the post-conv time dimension can collapse to <=1 frame, producing a
+# noisy UserWarning + NaN. We pad short crops to MIN_EMBEDDING_DURATION below,
+# and silence the residual warning (NaN is caught downstream by the
+# isfinite() check in _cosine_similarity).
+warnings.filterwarnings(
+    "ignore",
+    message=r"std\(\): degrees of freedom is <= 0.*",
+    category=UserWarning,
+)
+
 
 def _load_audio_dict(wav_path: str) -> dict:
     waveform, sample_rate = sf.read(wav_path, dtype="float32")
@@ -21,6 +33,10 @@ def _load_audio_dict(wav_path: str) -> dict:
     return {"waveform": torch.from_numpy(waveform), "sample_rate": sample_rate}
 
 MIN_REFERENCE_VOICE_SECONDS = 3.0
+# pyannote/embedding's pooling layer computes std with Bessel's correction.
+# If the post-conv time dimension collapses to <=1 frame, std() returns NaN.
+# Empirically ~2s of input audio is enough to keep that dimension >=2 frames.
+MIN_EMBEDDING_DURATION = 2.0
 
 
 @lru_cache(maxsize=1)
@@ -54,26 +70,41 @@ def compute_embedding(
     If start/end are None, embeds the entire file."""
     inference = _get_inference()
     audio = _load_audio_dict(wav_path)
+    sample_rate = audio["sample_rate"]
+    duration = audio["waveform"].shape[-1] / sample_rate
 
-    if start_sec is None and end_sec is None:
-        emb = inference(audio)
-    else:
-        if start_sec is None:
-            start_sec = 0.0
-        if end_sec is None:
-            raise ValueError("end_sec must be provided if start_sec is set")
-        sample_rate = audio["sample_rate"]
-        duration = audio["waveform"].shape[-1] / sample_rate
-        # pyannote's internal duration check is strict; back off by one sample
-        # so we never tie or exceed it due to float rounding.
-        end_sec = min(end_sec, duration - 1.0 / sample_rate)
-        start_sec = max(0.0, min(start_sec, end_sec))
-        emb = inference.crop(audio, PSegment(start_sec, end_sec))
+    if start_sec is None:
+        start_sec = 0.0
+    if end_sec is None:
+        end_sec = duration
+
+    # Pad short ranges up to MIN_EMBEDDING_DURATION using surrounding audio.
+    # Without this, short diarization segments (or short teacher reference
+    # clips) make pyannote's pooling layer compute std() on a single frame,
+    # producing a UserWarning + NaN embedding.
+    if end_sec - start_sec < MIN_EMBEDDING_DURATION:
+        pad = (MIN_EMBEDDING_DURATION - (end_sec - start_sec)) / 2
+        start_sec = max(0.0, start_sec - pad)
+        end_sec = min(duration, end_sec + pad)
+        shortfall = MIN_EMBEDDING_DURATION - (end_sec - start_sec)
+        if shortfall > 0:
+            if start_sec > 0:
+                start_sec = max(0.0, start_sec - shortfall)
+            else:
+                end_sec = min(duration, end_sec + shortfall)
+
+    # pyannote's internal duration check is strict; back off by one sample
+    # so we never tie or exceed it due to float rounding.
+    end_sec = min(end_sec, duration - 1.0 / sample_rate)
+    start_sec = max(0.0, min(start_sec, end_sec))
+    emb = inference.crop(audio, PSegment(start_sec, end_sec))
 
     return np.asarray(emb).flatten()
 
 
 def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
+    if not (np.isfinite(a).all() and np.isfinite(b).all()):
+        return 0.0
     na = np.linalg.norm(a)
     nb = np.linalg.norm(b)
     if na == 0 or nb == 0:
