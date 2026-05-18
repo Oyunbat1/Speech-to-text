@@ -122,12 +122,29 @@ def assign_roles(
         fallback_used = True
         teacher_speaker_id = max(total_by_speaker, key=total_by_speaker.get)
 
+    # Number non-teacher speakers as "Student 1", "Student 2", ... in
+    # chronological order of first appearance.
+    first_seen: dict[str, float] = {}
     for seg in segments:
-        seg.role = "Teacher" if seg.speaker_id == teacher_speaker_id else "Student"
+        if seg.speaker_id == teacher_speaker_id:
+            continue
+        if seg.speaker_id not in first_seen:
+            first_seen[seg.speaker_id] = seg.start
+    student_order = sorted(first_seen, key=first_seen.get)
+    student_label: dict[str, str] = {
+        sid: f"Student {i + 1}" for i, sid in enumerate(student_order)
+    }
+
+    for seg in segments:
+        if seg.speaker_id == teacher_speaker_id:
+            seg.role = "Teacher"
+        else:
+            seg.role = student_label[seg.speaker_id]
 
     return segments, {
         "fallback_used": fallback_used,
         "best_similarity": best_sim,
         "similarities": similarities,
         "teacher_speaker_id": teacher_speaker_id,
+        "student_labels": student_label,
     }
