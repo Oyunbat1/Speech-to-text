@@ -63,11 +63,20 @@ def process_lecture(
 
         report(f"Transcribing {len(segments)} segments via Chimege...")
         texts: list[str] = []
+        empty_count = 0
         for i, seg in enumerate(segments, start=1):
             if i % 10 == 0 or i == len(segments):
                 report(f"  transcribing {i}/{len(segments)}")
             wav_bytes = slice_audio(lecture_wav, seg.start, seg.end)
-            texts.append(transcribe(wav_bytes))
+            text = transcribe(wav_bytes)
+            if not text:
+                empty_count += 1
+            texts.append(text)
+        if empty_count:
+            report(
+                f"WARNING: {empty_count}/{len(segments)} segments returned empty text "
+                f"(rate limit, no speech, or Chimege failure)."
+            )
 
         report("Writing xlsx...")
         write_xlsx(

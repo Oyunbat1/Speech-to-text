@@ -43,13 +43,14 @@ lecture video           →  audio (WAV 16kHz mono)     │
 - Local file storage in a temp directory; files deleted after download
 - Reference-voice-based teacher identification with longest-speaker fallback
 - Mongolian language only
+- Per-speaker labeling: one "Teacher" plus "Student 1", "Student 2", ... numbered by chronological order of first appearance
 
 ### Explicitly out of scope (do NOT add)
 - Authentication, user accounts, sessions
 - Database (no Postgres, no SQLite, no ORM)
 - Payment integration
 - Multi-language support
-- Identifying *individual* students (all non-teachers are just "Student")
+- Identifying students *by name* or *by face* (they remain anonymous "Student 1", "Student 2", ... based on diarization only)
 - Async job queue (Celery, RQ) — synchronous is fine for MVP
 - Docker / deployment — runs locally for now
 - Tests beyond a single smoke test on the pipeline
@@ -204,13 +205,14 @@ def assign_roles(segments: list[Segment],
         2. Compute embedding for that segment from lecture_wav.
         3. Cosine-similarity to teacher reference embedding.
        The speaker with the highest similarity ABOVE threshold → 'Teacher'.
-       Everyone else → 'Student'.
+       Everyone else → 'Student 1', 'Student 2', ... numbered by chronological
+       order of first appearance in the lecture.
 
        If NO speaker is above threshold, fall back to:
-         longest-total-airtime speaker = Teacher, others = Student.
+         longest-total-airtime speaker = Teacher, others = numbered students.
        Set fallback flag in returned info dict.
 
-       Returns (mutated_segments, {'fallback_used': bool, 'best_similarity': float})."""
+       Returns (mutated_segments, {'fallback_used': bool, 'best_similarity': float, ...})."""
 ```
 
 ### `app/transcribe.py`
@@ -329,7 +331,7 @@ No unit tests for individual modules unless something breaks repeatedly.
 - Requires a clean teacher voice sample (10–30s, no overlapping voices).
 - Only Mongolian. English / code-switching may produce garbage.
 - No background noise reduction — noisy classroom recordings will degrade STT and embedding accuracy.
-- Cannot distinguish individual students — all non-teachers are grouped as "Student".
+- Students are distinguished only via pyannote diarization (Student 1, Student 2, ...). The same physical student may get split into multiple labels if their voice changes, and two students with very similar voices may collapse into one label. We don't identify students by name.
 - Synchronous request: large files may hit browser/proxy timeouts. Cap upload size at ~200MB in `main.py`.
 - Each Chimege API call costs money. No caching.
 
@@ -349,7 +351,7 @@ No unit tests for individual modules unless something breaks repeatedly.
 - ❌ Don't use Whisper / Google STT / Azure STT — Chimege is the spec.
 - ❌ Don't add a database. Files on disk only.
 - ❌ Don't introduce React or any frontend framework. One HTML file.
-- ❌ Don't try to identify *individual* students. All non-teachers = "Student".
+- ❌ Don't try to identify students by *name* or face. Use diarization-derived "Student 1", "Student 2", ... only.
 - ❌ Don't average embeddings across all segments of a speaker. Use the longest segment.
 - ❌ Don't skip the fallback. If matching fails, fall back gracefully with a flag.
 - ❌ Don't write 12 abstractions before the pipeline works end-to-end. Happy path first.

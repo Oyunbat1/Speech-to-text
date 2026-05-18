@@ -24,10 +24,18 @@ def transcribe(wav_bytes: bytes) -> str:
     if not token:
         raise RuntimeError("CHIMEGE_TOKEN not set.")
 
+    if len(wav_bytes) < 1024:
+        print(f"[transcribe] skipping segment: payload {len(wav_bytes)}B is too small")
+        return ""
+
     uuid = _submit(wav_bytes, token)
     if not uuid:
+        print("[transcribe] empty result: submit returned no UUID")
         return ""
-    return _poll(uuid, token)
+    text = _poll(uuid, token)
+    if not text:
+        print(f"[transcribe] empty result: no text returned for UUID {uuid}")
+    return text
 
 
 def _submit(wav_bytes: bytes, token: str) -> str:
