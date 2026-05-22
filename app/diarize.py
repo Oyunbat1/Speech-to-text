@@ -25,18 +25,14 @@ class Segment:
 
 @lru_cache(maxsize=1)
 def _get_pipeline() -> Pipeline:
-    token = os.getenv("HF_TOKEN")
-    if not token:
+    if not os.getenv("HF_TOKEN"):
         raise RuntimeError(
             "HF_TOKEN not set. Create one at huggingface.co and accept the "
             "user conditions on pyannote/speaker-diarization-3.1, "
             "pyannote/segmentation-3.0, and pyannote/embedding."
         )
     try:
-        pipeline = Pipeline.from_pretrained(
-            "pyannote/speaker-diarization-3.1",
-            token=token,
-        )
+        pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1")
     except Exception as e:
         msg = str(e)
         if "401" in msg or "gated" in msg.lower() or "access" in msg.lower():

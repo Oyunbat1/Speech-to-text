@@ -41,11 +41,10 @@ MIN_EMBEDDING_DURATION = 2.0
 
 @lru_cache(maxsize=1)
 def _get_inference() -> Inference:
-    token = os.getenv("HF_TOKEN")
-    if not token:
+    if not os.getenv("HF_TOKEN"):
         raise RuntimeError("HF_TOKEN not set.")
     try:
-        model = Model.from_pretrained("pyannote/embedding", token=token)
+        model = Model.from_pretrained("pyannote/embedding")
     except Exception as e:
         msg = str(e)
         if "401" in msg or "gated" in msg.lower() or "access" in msg.lower():
